@@ -1,11 +1,10 @@
 --TEST--
-phpunit --stop-on-defect StopOnWarningTestSuite ./tests/_files/StopOnWarningTestSuite.php
+phpunit --stop-on-defect ./tests/_files/StopOnWarningTestSuite.php
 --FILE--
 <?php declare(strict_types=1);
 $arguments = [
     '--no-configuration',
     '--stop-on-defect',
-    'StopOnWarningTestSuite',
     \realpath(__DIR__ . '/../../_files/StopOnWarningTestSuite.php'),
 ];
 \array_splice($_SERVER['argv'], 1, count($arguments), $arguments);
@@ -22,7 +21,7 @@ Time: %s, Memory: %s
 There was 1 warning:
 
 1) Warning
-No tests found in class "NoTestCases".
+No tests found in class "PHPUnit\TestFixture\NoTestCases".
 
 WARNINGS!
 Tests: 1, Assertions: 0, Warnings: 1.

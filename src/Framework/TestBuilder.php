@@ -9,41 +9,50 @@
  */
 namespace PHPUnit\Framework;
 
+use function assert;
+use function count;
+use function get_class;
+use function sprintf;
+use function trim;
+use PHPUnit\Util\Filter;
+use PHPUnit\Util\InvalidDataSetException;
 use PHPUnit\Util\Test as TestUtil;
+use ReflectionClass;
+use Throwable;
 
 /**
  * @internal This class is not covered by the backward compatibility promise for PHPUnit
  */
 final class TestBuilder
 {
-    public function build(\ReflectionClass $theClass, string $name): Test
+    public function build(ReflectionClass $theClass, string $methodName): Test
     {
         $className = $theClass->getName();
 
         if (!$theClass->isInstantiable()) {
             return new WarningTestCase(
-                \sprintf('Cannot instantiate class "%s".', $className)
+                sprintf('Cannot instantiate class "%s".', $className)
             );
         }
 
         $backupSettings = TestUtil::getBackupSettings(
             $className,
-            $name
+            $methodName
         );
 
         $preserveGlobalState = TestUtil::getPreserveGlobalStateSettings(
             $className,
-            $name
+            $methodName
         );
 
         $runTestInSeparateProcess = TestUtil::getProcessIsolationSettings(
             $className,
-            $name
+            $methodName
         );
 
         $runClassInSeparateProcess = TestUtil::getClassProcessIsolationSettings(
             $className,
-            $name
+            $methodName
         );
 
         $constructor = $theClass->getConstructor();
@@ -55,152 +64,176 @@ final class TestBuilder
         $parameters = $constructor->getParameters();
 
         // TestCase() or TestCase($name)
-        if (\count($parameters) < 2) {
-            $test = new $className;
+        if (count($parameters) < 2) {
+            $test = $this->buildTestWithoutData($className);
         } // TestCase($name, $data)
         else {
             try {
                 $data = TestUtil::getProvidedData(
                     $className,
-                    $name
+                    $methodName
                 );
             } catch (IncompleteTestError $e) {
-                $message = \sprintf(
-                    'Test for %s::%s marked incomplete by data provider',
+                $message = sprintf(
+                    "Test for %s::%s marked incomplete by data provider\n%s",
                     $className,
-                    $name
+                    $methodName,
+                    $this->throwableToString($e)
                 );
 
-                $_message = $e->getMessage();
-
-                if (!empty($_message)) {
-                    $message .= "\n" . $_message;
-                }
-
-                $data = new IncompleteTestCase($className, $name, $message);
+                $data = new IncompleteTestCase($className, $methodName, $message);
             } catch (SkippedTestError $e) {
-                $message = \sprintf(
-                    'Test for %s::%s skipped by data provider',
+                $message = sprintf(
+                    "Test for %s::%s skipped by data provider\n%s",
                     $className,
-                    $name
+                    $methodName,
+                    $this->throwableToString($e)
                 );
 
-                $_message = $e->getMessage();
-
-                if (!empty($_message)) {
-                    $message .= "\n" . $_message;
-                }
-
-                $data = new SkippedTestCase($className, $name, $message);
-            } catch (\Throwable $t) {
-                $message = \sprintf(
-                    'The data provider specified for %s::%s is invalid.',
+                $data = new SkippedTestCase($className, $methodName, $message);
+            } catch (Throwable $t) {
+                $message = sprintf(
+                    "The data provider specified for %s::%s is invalid.\n%s",
                     $className,
-                    $name
+                    $methodName,
+                    $this->throwableToString($t)
                 );
-
-                $_message = $t->getMessage();
-
-                if (!empty($_message)) {
-                    $message .= "\n" . $_message;
-                }
 
                 $data = new WarningTestCase($message);
             }
 
             // Test method with @dataProvider.
             if (isset($data)) {
-                $test = new DataProviderTestSuite(
-                    $className . '::' . $name
+                $test = $this->buildDataProviderTestSuite(
+                    $methodName,
+                    $className,
+                    $data,
+                    $runTestInSeparateProcess,
+                    $preserveGlobalState,
+                    $runClassInSeparateProcess,
+                    $backupSettings
                 );
-
-                if (empty($data)) {
-                    $data = new WarningTestCase(
-                        \sprintf(
-                            'No tests found in suite "%s".',
-                            $test->getName()
-                        )
-                    );
-                }
-
-                $groups = TestUtil::getGroups($className, $name);
-
-                if ($data instanceof WarningTestCase ||
-                    $data instanceof SkippedTestCase ||
-                    $data instanceof IncompleteTestCase) {
-                    $test->addTest($data, $groups);
-                } else {
-                    foreach ($data as $_dataName => $_data) {
-                        $_test = new $className($name, $_data, $_dataName);
-
-                        \assert($_test instanceof TestCase);
-
-                        if ($runTestInSeparateProcess) {
-                            $_test->setRunTestInSeparateProcess(true);
-
-                            if ($preserveGlobalState !== null) {
-                                $_test->setPreserveGlobalState($preserveGlobalState);
-                            }
-                        }
-
-                        if ($runClassInSeparateProcess) {
-                            $_test->setRunClassInSeparateProcess(true);
-
-                            if ($preserveGlobalState !== null) {
-                                $_test->setPreserveGlobalState($preserveGlobalState);
-                            }
-                        }
-
-                        if ($backupSettings['backupGlobals'] !== null) {
-                            $_test->setBackupGlobals(
-                                $backupSettings['backupGlobals']
-                            );
-                        }
-
-                        if ($backupSettings['backupStaticAttributes'] !== null) {
-                            $_test->setBackupStaticAttributes(
-                                $backupSettings['backupStaticAttributes']
-                            );
-                        }
-
-                        $test->addTest($_test, $groups);
-                    }
-                }
             } else {
-                $test = new $className;
+                $test = $this->buildTestWithoutData($className);
             }
         }
 
         if ($test instanceof TestCase) {
-            $test->setName($name);
-
-            if ($runTestInSeparateProcess) {
-                $test->setRunTestInSeparateProcess(true);
-
-                if ($preserveGlobalState !== null) {
-                    $test->setPreserveGlobalState($preserveGlobalState);
-                }
-            }
-
-            if ($runClassInSeparateProcess) {
-                $test->setRunClassInSeparateProcess(true);
-
-                if ($preserveGlobalState !== null) {
-                    $test->setPreserveGlobalState($preserveGlobalState);
-                }
-            }
-
-            if ($backupSettings['backupGlobals'] !== null) {
-                $test->setBackupGlobals($backupSettings['backupGlobals']);
-            }
-
-            if ($backupSettings['backupStaticAttributes'] !== null) {
-                $test->setBackupStaticAttributes(
-                    $backupSettings['backupStaticAttributes']
-                );
-            }
+            $test->setName($methodName);
+            $this->configureTestCase(
+                $test,
+                $runTestInSeparateProcess,
+                $preserveGlobalState,
+                $runClassInSeparateProcess,
+                $backupSettings
+            );
         }
 
         return $test;
+    }
+
+    /** @psalm-param class-string $className */
+    private function buildTestWithoutData(string $className)
+    {
+        return new $className;
+    }
+
+    /** @psalm-param class-string $className */
+    private function buildDataProviderTestSuite(
+        string $methodName,
+        string $className,
+        $data,
+        bool $runTestInSeparateProcess,
+        ?bool $preserveGlobalState,
+        bool $runClassInSeparateProcess,
+        array $backupSettings
+    ): DataProviderTestSuite {
+        $dataProviderTestSuite = new DataProviderTestSuite(
+            $className . '::' . $methodName
+        );
+
+        $groups = TestUtil::getGroups($className, $methodName);
+
+        if ($data instanceof WarningTestCase ||
+            $data instanceof SkippedTestCase ||
+            $data instanceof IncompleteTestCase) {
+            $dataProviderTestSuite->addTest($data, $groups);
+        } else {
+            foreach ($data as $_dataName => $_data) {
+                $_test = new $className($methodName, $_data, $_dataName);
+
+                assert($_test instanceof TestCase);
+
+                $this->configureTestCase(
+                    $_test,
+                    $runTestInSeparateProcess,
+                    $preserveGlobalState,
+                    $runClassInSeparateProcess,
+                    $backupSettings
+                );
+
+                $dataProviderTestSuite->addTest($_test, $groups);
+            }
+        }
+
+        return $dataProviderTestSuite;
+    }
+
+    private function configureTestCase(
+        TestCase $test,
+        bool $runTestInSeparateProcess,
+        ?bool $preserveGlobalState,
+        bool $runClassInSeparateProcess,
+        array $backupSettings
+    ): void {
+        if ($runTestInSeparateProcess) {
+            $test->setRunTestInSeparateProcess(true);
+
+            if ($preserveGlobalState !== null) {
+                $test->setPreserveGlobalState($preserveGlobalState);
+            }
+        }
+
+        if ($runClassInSeparateProcess) {
+            $test->setRunClassInSeparateProcess(true);
+
+            if ($preserveGlobalState !== null) {
+                $test->setPreserveGlobalState($preserveGlobalState);
+            }
+        }
+
+        if ($backupSettings['backupGlobals'] !== null) {
+            $test->setBackupGlobals($backupSettings['backupGlobals']);
+        }
+
+        if ($backupSettings['backupStaticAttributes'] !== null) {
+            $test->setBackupStaticAttributes(
+                $backupSettings['backupStaticAttributes']
+            );
+        }
+    }
+
+    private function throwableToString(Throwable $t): string
+    {
+        $message = $t->getMessage();
+
+        if (empty(trim($message))) {
+            $message = '<no message>';
+        }
+
+        if ($t instanceof InvalidDataSetException) {
+            return sprintf(
+                "%s\n%s",
+                $message,
+                Filter::getFilteredStacktrace($t)
+            );
+        }
+
+        return sprintf(
+            "%s: %s\n%s",
+            get_class($t),
+            $message,
+            Filter::getFilteredStacktrace($t)
+        );
     }
 }

@@ -7,18 +7,16 @@ $arguments = [
     '--debug',
     '--order-by=depends,random',
     '--random-order-seed=54321',
-    'MultiDependencyTest',
     \realpath(__DIR__ . '/../execution-order/_files/MultiDependencyTest.php'),
 ];
 \array_splice($_SERVER['argv'], 1, count($arguments), $arguments);
 
 require __DIR__ . '/../../bootstrap.php';
 PHPUnit\TextUI\Command::main();
-?>
 --EXPECTF--
 PHPUnit %s by Sebastian Bergmann and contributors.
 
-Random seed:   54321
+Random Seed:   54321
 
 Test 'MultiDependencyTest::testTwo' started
 Test 'MultiDependencyTest::testTwo' ended

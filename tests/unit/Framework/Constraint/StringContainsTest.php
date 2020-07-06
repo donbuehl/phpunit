@@ -30,7 +30,7 @@ final class StringContainsTest extends ConstraintTestCase
             $constraint->evaluate('barbazbar');
         } catch (ExpectationFailedException $e) {
             $this->assertEquals(
-                <<<EOF
+                <<<'EOF'
 Failed asserting that 'barbazbar' contains "foo".
 
 EOF
@@ -82,7 +82,7 @@ EOF
             $constraint->evaluate('barbazbar', 'custom message');
         } catch (ExpectationFailedException $e) {
             $this->assertEquals(
-                <<<EOF
+                <<<'EOF'
 custom message
 Failed asserting that 'barbazbar' contains "foo".
 
@@ -95,5 +95,14 @@ EOF
         }
 
         $this->fail();
+    }
+
+    public function testEvaluateEmptyStringInFoo(): void
+    {
+        $stringContains = new StringContains('');
+
+        $stringContains->evaluate('foo');
+
+        $this->assertSame('contains ""', $stringContains->toString());
     }
 }

@@ -9,7 +9,17 @@
  */
 namespace PHPUnit\Util;
 
+use const DIRECTORY_SEPARATOR;
+use function addslashes;
+use function basename;
+use function dirname;
+use function sprintf;
 use PHPUnit\Framework\TestCase;
+use PHPUnit\TextUI\XmlConfiguration\CodeCoverage\CodeCoverage;
+use PHPUnit\TextUI\XmlConfiguration\CodeCoverage\Filter\Directory;
+use PHPUnit\TextUI\XmlConfiguration\CodeCoverage\Filter\DirectoryCollection;
+use PHPUnit\TextUI\XmlConfiguration\File;
+use PHPUnit\TextUI\XmlConfiguration\FileCollection;
 
 /**
  * @small
@@ -19,7 +29,7 @@ final class XDebugFilterScriptGeneratorTest extends TestCase
 {
     public function testReturnsExpectedScript(): void
     {
-        $expectedDirectory = \sprintf('%s/', __DIR__);
+        $expectedDirectory = sprintf(addslashes('%s' . DIRECTORY_SEPARATOR), __DIR__);
         $expected          = <<<EOF
 <?php declare(strict_types=1);
 if (!\\function_exists('xdebug_set_filter')) {
@@ -30,9 +40,9 @@ if (!\\function_exists('xdebug_set_filter')) {
     \\XDEBUG_FILTER_CODE_COVERAGE,
     \\XDEBUG_PATH_WHITELIST,
     [
-        '$expectedDirectory',
-        '$expectedDirectory',
-        '$expectedDirectory',
+        '{$expectedDirectory}',
+        '{$expectedDirectory}',
+        '{$expectedDirectory}',
         'src/foo.php',
         'src/bar.php'
     ]
@@ -40,43 +50,59 @@ if (!\\function_exists('xdebug_set_filter')) {
 
 EOF;
 
-        $directoryPathThatDoesNotExist = \sprintf('%s/path/that/does/not/exist', __DIR__);
-        $this->assertDirectoryNotExists($directoryPathThatDoesNotExist);
+        $directoryPathThatDoesNotExist = sprintf('%s/path/that/does/not/exist', __DIR__);
+        $this->assertDirectoryDoesNotExist($directoryPathThatDoesNotExist);
 
-        $filterConfiguration = [
-            'include' => [
-                'directory' => [
-                    [
-                        'path'   => __DIR__,
-                        'suffix' => '.php',
-                        'prefix' => '',
-                    ],
-                    [
-                        'path'   => \sprintf('%s/', __DIR__),
-                        'suffix' => '.php',
-                        'prefix' => '',
-                    ],
-                    [
-                        'path'   => \sprintf('%s/./%s', \dirname(__DIR__), \basename(__DIR__)),
-                        'suffix' => '.php',
-                        'prefix' => '',
-                    ],
-                    [
-                        'path'   => $directoryPathThatDoesNotExist,
-                        'suffix' => '.php',
-                        'prefix' => '',
-                    ],
-                ],
-                'file' => [
-                    'src/foo.php',
-                    'src/bar.php',
-                ],
-            ],
-            'exclude' => [
-                'directory' => [],
-                'file'      => [],
-            ],
-        ];
+        $filterConfiguration = new CodeCoverage(
+            DirectoryCollection::fromArray(
+                [
+                    new Directory(
+                        __DIR__,
+                        '',
+                        '.php',
+                        'DEFAULT'
+                    ),
+                    new Directory(
+                        sprintf('%s/', __DIR__),
+                        '',
+                        '.php',
+                        'DEFAULT'
+                    ),
+                    new Directory(
+                        sprintf('%s/./%s', dirname(__DIR__), basename(__DIR__)),
+                        '',
+                        '.php',
+                        'DEFAULT'
+                    ),
+                    new Directory(
+                        $directoryPathThatDoesNotExist,
+                        '',
+                        '.php',
+                        'DEFAULT'
+                    ),
+                ]
+            ),
+            FileCollection::fromArray(
+                [
+                    new File('src/foo.php'),
+                    new File('src/bar.php'),
+                ]
+            ),
+            DirectoryCollection::fromArray([]),
+            FileCollection::fromArray([]),
+            false,
+            true,
+            true,
+            false,
+            false,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
 
         $writer = new XdebugFilterScriptGenerator;
         $actual = $writer->generate($filterConfiguration);

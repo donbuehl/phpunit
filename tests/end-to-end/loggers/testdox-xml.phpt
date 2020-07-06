@@ -1,12 +1,11 @@
 --TEST--
-phpunit --testdox-xml php://stdout StatusTest ../../_files/StatusTest.php
+phpunit --testdox-xml php://stdout ../../_files/StatusTest.php
 --FILE--
 <?php declare(strict_types=1);
 $arguments = [
     '--no-configuration',
     '--testdox-xml',
     'php://stdout',
-    'StatusTest',
     \realpath(__DIR__ . '/../../basic/unit/StatusTest.php'),
 ];
 \array_splice($_SERVER['argv'], 1, count($arguments), $arguments);
@@ -22,7 +21,7 @@ PHPUnit %s by Sebastian Bergmann and contributors.
     <group name="default"/>
     <covers target="Foo"/>
     <uses target="Bar"/>
-    <testDouble type="AnInterface"/>
+    <testDouble type="PHPUnit\TestFixture\AnInterface"/>
   </test>
   <test className="PHPUnit\SelfTest\Basic\StatusTest" methodName="testFailure" prettifiedClassName="Test result status with and without message" prettifiedMethodName="Failure" status="3" time="%s" size="-1" groups="default" exceptionLine="%d" exceptionMessage="Failed asserting that false is true.">
     <group name="default"/>
